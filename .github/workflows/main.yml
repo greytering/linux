@@ -1,0 +1,49 @@
+name: Build MSM8953 Mainline Kernel
+
+on:
+  workflow_dispatch:  # 手动触发
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
+    - name: Set up environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential openssl pkg-config libssl-dev libncurses-dev minizip libelf-dev flex bison libc6-dev libidn11-dev rsync bc lz4 debootstrap git curl \
+          gcc-aarch64-linux-gnu dpkg-dev dpkg qemu-user-static \
+          debhelper-compat libdw-dev libssl-de
+
+    - name: Build kernel
+      run: |
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CC=aarch64-linux-gnu-gcc
+        export PATH=$PATH:/usr/bin
+
+        # 默认使用 defconfig
+        make msm8953_defconfig
+
+        # 也可以改为你的 defconfig，比如：make xiaomi_mido_defconfig
+
+        make -j$(nproc)
+
+        fakeroot make-kpkg  --initrd --cross-compile aarch64-linux-gnu- --arch arm64 kernel_image kernel_headers -j$(nproc)
+
+    - name: Upload zImage or Image.gz
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kernel-Image
+        path: |
+          arch/arm64/boot/Image*
+          arch/arm64/boot/*
+          ../*.deb
